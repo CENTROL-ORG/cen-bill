@@ -30,7 +30,6 @@
         .bill-meta { font-size: 11px; color: #666; }
         .btn-pay { background: #00ff88; color: #000; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; }
         .btn-pay:hover { background: #00cc6e; }
-        .btn-pay.disabled { background: #222; color: #555; cursor: not-allowed; }
 
         .form-group { margin-bottom: 15px; }
         label { display: block; font-size: 11px; color: #888; font-weight: bold; margin-bottom: 5px; text-transform: uppercase; }
@@ -65,7 +64,7 @@
 
         <!-- SECTION 1: REGULAR WEEKLY BILL GENERATOR -->
         <div class="card">
-            <h2>Regular 7-Day Invoices <span id="reg-timer" class="accent-blue" style="font-size:12px; font-family:monospace;"></span></h2>
+            <h2>Regular 7-Day Invoices</h2>
             <div id="regular-bills-container" class="list-box"></div>
         </div>
 
@@ -75,7 +74,7 @@
             <div id="taxes-container" class="list-box"></div>
         </div>
 
-        <!-- SECTION 3: CUSTOM BILL GENERATOR & LOGS -->
+        <!-- SECTION 3: CUSTOM BILL GENERATOR -->
         <div class="card">
             <h2>Issue Ad-hoc Custom Invoices</h2>
             <div class="form-group">
@@ -116,16 +115,27 @@
         parking: 150, security: 300, extra: 1000
     };
 
-    // Calculate dynamic electricity based on day tracking
-    function getWeeklyElectricityRate(daysElapsed) {
-        let cycleDay = daysElapsed % 626; // Total combined full cycle days (200 + 90 + 246 + 90)
-        if (cycleDay < 200) return (6000 * 7) / 30;
-        if (cycleDay < 290) return (1000 * 7) / 30;
-        if (cycleDay < 536) return (6000 * 7) / 30;
-        return (1000 * 7) / 30;
+    // New Simplified Calendar Range Logic: Nov 1 to March 20 = 500, else 6000
+    function getWeeklyElectricityRate(timestamp) {
+        const date = new Date(timestamp);
+        const month = date.getMonth(); // 0 = Jan, 10 = Nov, 11 = Dec
+        const day = date.getDate();
+
+        let isWinterRate = false;
+
+        if (month === 10 || month === 11 || month === 0 || month === 1) {
+            // Whole of Nov, Dec, Jan, Feb
+            isWinterRate = true;
+        } else if (month === 2 && day <= 20) {
+            // March 1st to March 20th
+            isWinterRate = true;
+        }
+
+        const monthlyRate = isWinterRate ? 500 : 6000;
+        return (monthlyRate * 7) / 30; // Auto convert monthly price to 7-day rate
     }
 
-    // Connect Engine Listener
+    // Dynamic Database Synchronization Node Listener
     db.ref(`users/${userId}`).on('value', async (snap) => {
         entireDataCache = snap.val() || {};
         userBalance = parseFloat(entireDataCache.balance) || 0;
@@ -136,8 +146,10 @@
 
     async function runBillingChronologyEngine() {
         const now = Date.now();
-        const daysSinceDeployment = Math.floor((now - BASELINE_DATE) / (24 * 60 * 60 * 1000));
-        const weeksElapsed = Math.floor(daysSinceDeployment / 7);
+        
+        // Offset indexing so Day 1 and Week 1 fire instantly upon start
+        const daysSinceDeployment = Math.floor((now - BASELINE_DATE) / (24 * 60 * 60 * 1000)) + 1;
+        const weeksElapsed = Math.floor((daysSinceDeployment - 1) / 7) + 1;
 
         let updates = {};
         let penaltyAccumulatedToday = 0;
@@ -149,14 +161,14 @@
         }
         const regularTracking = entireDataCache.cen_regular_tracking || { initial_week_processed: 0 };
         
-        // Auto-generate missing weeks
         for (let w = regularTracking.initial_week_processed + 1; w <= weeksElapsed; w++) {
-            let weekTargetBaseTime = BASELINE_DATE + (w * 7 * 24 * 60 * 60 * 1000);
-            let daysAtWeekInvoice = Math.floor((weekTargetBaseTime - BASELINE_DATE) / (24 * 60 * 60 * 1000));
+            let weekTargetBaseTime = BASELINE_DATE + ((w - 1) * 7 * 24 * 60 * 60 * 1000);
             
             let staticWeeklySum = 0;
             Object.values(MonthlyPrices).forEach(val => { staticWeeklySum += (val * 7) / 30; });
-            const dynamicElectricity = getWeeklyElectricityRate(daysAtWeekInvoice);
+            
+            // Electricity is dynamically priced using the generation timestamp
+            const dynamicElectricity = getWeeklyElectricityRate(weekTargetBaseTime);
             const finalWeekCost = staticWeeklySum + dynamicElectricity;
 
             let newWeekRef = db.ref(`users/${userId}/cen_regular_bills`).push();
@@ -177,7 +189,7 @@
         const taxTracking = entireDataCache.cen_tax_tracking || { last_day_processed: 0 };
         
         for (let d = taxTracking.last_day_processed + 1; d <= daysSinceDeployment; d++) {
-            let dayTargetTimestamp = BASELINE_DATE + (d * 24 * 60 * 60 * 1000);
+            let dayTargetTimestamp = BASELINE_DATE + ((d - 1) * 24 * 60 * 60 * 1000);
             let randomTaxValue = Math.floor(Math.random() * (900 - 400 + 1)) + 400;
 
             let newTaxRef = db.ref(`users/${userId}/cen_taxes`).push();
@@ -191,19 +203,18 @@
             updates['cen_tax_tracking/last_day_processed'] = d;
         }
 
-        // Execute generation loops synchronously before counting penalties
+        // Push layout updates to Firebase and exit if cycles were generated
         if (Object.keys(updates).length > 0) {
             await db.ref(`users/${userId}`).update(updates);
-            return; // Engine re-fires on internal database layout modification
+            return; 
         }
 
-        // --- 3. DYNAMIC CRUNCH PENALTY RUNTIME ENGINE ---
+        // --- 3. DYNAMIC PUNISHMENT & PENALTY COUNTER ENGINE ---
         const regularBills = entireDataCache.cen_regular_bills || {};
         Object.entries(regularBills).forEach(([key, bill]) => {
             if (bill.status === "UNPAID") {
                 totalOutstandingCapital += bill.amount;
                 if (now > bill.due_timestamp) {
-                    let overdueDays = Math.floor((now - bill.due_timestamp) / (24 * 60 * 60 * 1000)) + 1;
                     penaltyAccumulatedToday += 700; 
                 }
             }
@@ -229,13 +240,12 @@
             }
         });
 
-        // Auto-Deduct Punishment Fees safely (Does not drop below 0 balance)
+        // Safe Auto-Deduct Loop Strategy (Maintains base liquid threshold > ₹0)
         if (penaltyAccumulatedToday > 0 && userBalance > 0) {
-            // Check if penalty has already been executed for this discrete minute/hour block to prevent infinite loops
             let lastDeduct = entireDataCache.last_penalty_deduction_time || 0;
-            if (now - lastDeduct > 60000) { // Limit automated balance matching intervals
-                let deductions = penaltyAccumulatedToday / 1440; // Convert daily weight to minutes fraction
-                let prospectiveBalance = userBalance - deductions;
+            if (now - lastDeduct > 60000) { 
+                let minuteFractionDeduction = penaltyAccumulatedToday / 1440; 
+                let prospectiveBalance = userBalance - minuteFractionDeduction;
                 if (prospectiveBalance < 0) prospectiveBalance = 0;
                 
                 await db.ref(`users/${userId}`).update({
@@ -245,15 +255,15 @@
             }
         }
 
-        // UI Metrics Synchronization
+        // Interface Elements Refresh
         document.getElementById('stat-outstanding').innerText = `₹${totalOutstandingCapital.toFixed(2)}`;
         document.getElementById('stat-penalty').innerText = `₹${penaltyAccumulatedToday}/day`;
 
-        renderAllInterfaceViews(regularBills, taxBills, customBills, daysSinceDeployment);
+        renderAllInterfaceViews(regularBills, taxBills, customBills);
     }
 
-    function renderAllInterfaceViews(reg, tax, cust, currentDay) {
-        // Render Regular Invoices
+    function renderAllInterfaceViews(reg, tax, cust) {
+        // Section 1 Display Matrix
         const regBox = document.getElementById('regular-bills-container');
         regBox.innerHTML = "";
         Object.entries(reg).reverse().forEach(([key, b]) => {
@@ -261,8 +271,8 @@
             regBox.innerHTML += `
                 <div class="bill-row" style="${isOverdue ? 'border-color:#ff0033;' : ''}">
                     <div class="bill-info">
-                        <strong>Week #${b.week_index} Cycle Bill</strong>
-                        <span class="bill-meta">Matures: ${new Date(b.due_timestamp).toLocaleDateString()}</span>
+                        <strong>Week #${b.week_index} Complete Invoice</strong>
+                        <span class="bill-meta">Deadline Limit: ${new Date(b.due_timestamp).toLocaleString()}</span>
                     </div>
                     <div style="display:flex; align-items:center; gap:15px;">
                         <span class="accent-amber" style="font-family:monospace; font-weight:bold;">₹${b.amount.toFixed(2)}</span>
@@ -271,7 +281,7 @@
                 </div>`;
         });
 
-        // Render Tax Log
+        // Section 2 Display Matrix
         const taxBox = document.getElementById('taxes-container');
         taxBox.innerHTML = "";
         Object.entries(tax).reverse().slice(0, 30).forEach(([key, t]) => {
@@ -279,8 +289,8 @@
             taxBox.innerHTML += `
                 <div class="bill-row" style="${isOverdue ? 'border-color:#ff0033;' : ''}">
                     <div class="bill-info">
-                        <strong>Day ${t.day_index} Core System Tax</strong>
-                        <span class="bill-meta">Grace Limit: ${new Date(t.due_timestamp).toLocaleDateString()}</span>
+                        <strong>Day ${t.day_index} System Assessment Tax</strong>
+                        <span class="bill-meta">Grace End: ${new Date(t.due_timestamp).toLocaleString()}</span>
                     </div>
                     <div style="display:flex; align-items:center; gap:15px;">
                         <span class="accent-red" style="font-family:monospace; font-weight:bold;">₹${t.amount}</span>
@@ -289,7 +299,7 @@
                 </div>`;
         });
 
-        // Render Custom Invoices Ledger
+        // Section 4 Display Matrix (Custom Ledgers)
         const custBox = document.getElementById('custom-bills-container');
         custBox.innerHTML = "";
         Object.entries(cust).reverse().forEach(([key, c]) => {
@@ -298,11 +308,11 @@
                 <div class="bill-row" style="${isOverdue ? 'border-color:#ff0033;' : ''}">
                     <div class="bill-info">
                         <strong>${c.description}</strong>
-                        <span class="bill-meta">24H Barrier: ${new Date(c.due_timestamp).toLocaleTimeString()}</span>
+                        <span class="bill-meta">24H Expiration: ${new Date(c.due_timestamp).toLocaleString()}</span>
                     </div>
                     <div style="display:flex; align-items:center; gap:15px;">
                         <span class="accent-blue" style="font-family:monospace; font-weight:bold;">₹${c.amount}</span>
-                        ${c.status === 'UNPAID' ? `<button class="btn-pay" onclick="settleInvoice('cen_custom_bills', '${key}', ${c.amount})">PAY</button>` : '<span class="accent-green">SETTLED</span>'}
+                        ${t.status === 'UNPAID' ? `<button class="btn-pay" onclick="settleInvoice('cen_custom_bills', '${key}', ${c.amount})">PAY</button>` : '<span class="accent-green">SETTLED</span>'}
                     </div>
                 </div>`;
         });
@@ -318,7 +328,7 @@
             description: desc.toUpperCase(),
             amount: amount,
             generated_timestamp: now,
-            due_timestamp: now + (24 * 60 * 60 * 1000), // Strict 24 Hour Countdown limit
+            due_timestamp: now + (24 * 60 * 60 * 1000), 
             status: "UNPAID"
         });
 
@@ -327,24 +337,23 @@
     }
 
     async function settleInvoice(nodePath, key, amount) {
-        if (userBalance < amount) return alert("Insufficient central bank balances to process complete settlement execution.");
+        if (userBalance < amount) return alert("Insufficient balance to execute full transaction processing.");
 
         let targetBalance = Math.round((userBalance - amount) * 100000) / 100000;
         let updates = {};
         updates[`balance`] = targetBalance;
         updates[`${nodePath}/${key}/status`] = "PAID";
 
-        // Feed directly into your existing ledger dashboard history tracking structure
         let historyRef = db.ref(`users/${userId}/history`).push();
         updates[`history/${historyRef.key}`] = {
             amount: -amount,
-            description: `CEN PAY REGISTRY: RECONCILIATION SUCCESSFUL (${nodePath.replace('cen_','').toUpperCase()})`,
+            description: `CEN PAY RECONCILIATION: CLEARED (${nodePath.replace('cen_','').toUpperCase()})`,
             timestamp: new Date().toLocaleString(),
             type: "DEBIT"
         };
 
         await db.ref(`users/${userId}`).update(updates);
-        alert("Invoice successfully processed and cleared.");
+        alert("Payment completed successfully.");
     }
 </script>
 </body>
