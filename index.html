@@ -140,6 +140,17 @@
         return (monthlyRate * 7) / 30; 
     }
 
+    // Helper function to build a local breakdown object if database is missing it
+    function generateLocalBreakdown(timestamp) {
+        let breakdown = {};
+        Object.entries(MonthlyPrices).forEach(([key, val]) => {
+            breakdown[key] = { amount: Math.round(((val * 7) / 30) * 100) / 100, status: "UNPAID" };
+        });
+        const elecAmount = getWeeklyElectricityRate(timestamp);
+        breakdown['electricity'] = { amount: Math.round(elecAmount * 100) / 100, status: "UNPAID" };
+        return breakdown;
+    }
+
     db.ref(`users/${userId}`).on('value', async (snap) => {
         entireDataCache = snap.val() || {};
         userBalance = parseFloat(entireDataCache.balance) || 0;
@@ -166,15 +177,7 @@
         
         for (let w = regularTracking.initial_week_processed + 1; w <= weeksElapsed; w++) {
             let weekTargetBaseTime = BASELINE_DATE + ((w - 1) * 7 * 24 * 60 * 60 * 1000);
-            
-            let breakdown = {};
-            Object.entries(MonthlyPrices).forEach(([key, val]) => {
-                breakdown[key] = { amount: Math.round(((val * 7) / 30) * 100) / 100, status: "UNPAID" };
-            });
-            
-            const elecAmount = getWeeklyElectricityRate(weekTargetBaseTime);
-            breakdown['electricity'] = { amount: Math.round(elecAmount * 100) / 100, status: "UNPAID" };
-
+            let breakdown = generateLocalBreakdown(weekTargetBaseTime);
             let finalWeekCost = Object.values(breakdown).reduce((sum, item) => sum + item.amount, 0);
 
             let newWeekRef = db.ref(`users/${userId}/cen_regular_bills`).push();
@@ -220,13 +223,11 @@
         Object.entries(regularBills).forEach(([key, bill]) => {
             if (bill.status === "UNPAID") {
                 let remainingAmount = 0;
-                if (bill.breakdown) {
-                    Object.values(bill.breakdown).forEach(item => {
-                        if (item.status === "UNPAID") remainingAmount += item.amount;
-                    });
-                } else {
-                    remainingAmount = bill.amount;
-                }
+                let activeBreakdown = bill.breakdown || generateLocalBreakdown(bill.generated_timestamp || BASELINE_DATE);
+                
+                Object.values(activeBreakdown).forEach(item => {
+                    if (item.status === "UNPAID") remainingAmount += item.amount;
+                });
 
                 totalOutstandingCapital += remainingAmount;
                 
@@ -285,7 +286,6 @@
     function renderAllInterfaceViews(reg, tax, cust) {
         const regBox = document.getElementById('regular-bills-container');
         
-        // Save open/close state of open dropdowns before clean re-render
         const openDropdownIds = [];
         document.querySelectorAll('.breakdown-container').forEach(el => {
             if (el.style.display === 'block') openDropdownIds.push(el.id);
@@ -297,28 +297,35 @@
             let currentRemaining = 0;
             let itemRowsHtml = "";
             
-            // Fixed direct access strategy for the nested breakdown node objects
-            if (b.breakdown) {
-                Object.entries(b.breakdown).forEach(([itemName, itemData]) => {
-                    let cost = parseFloat(itemData.amount) || 0;
-                    if (itemData.status === "UNPAID") {
-                        currentRemaining += cost;
-                    }
-                    
-                    itemRowsHtml += `
-                        <div class="breakdown-row">
-                            <span class="breakdown-label">🛠️ ${itemName.replace('_',' ')}</span>
-                            <div style="display:flex; align-items:center; gap:12px;">
-                                <span style="font-family:monospace;">₹${cost.toFixed(2)}</span>
-                                ${itemData.status === 'UNPAID' 
-                                    ? `<button class="btn-pay" onclick="settleSeparateItem('${key}', '${itemName}', ${cost})">PAY ITEM</button>` 
-                                    : '<span class="accent-green" style="font-size:11px; font-weight:bold;">PAID</span>'}
-                            </div>
-                        </div>`;
-                });
-            } else {
-                currentRemaining = b.status === "UNPAID" ? b.amount : 0;
-            }
+            // SECURITY FALLBACK: If DB node is missing 'breakdown', create it locally so layout never breaks
+            let activeBreakdown = b.breakdown || generateLocalBreakdown(b.generated_timestamp || BASELINE_DATE);
+
+            Object.entries(activeBreakdown).forEach(([itemName, itemData]) => {
+                let cost = parseFloat(itemData.amount) || 0;
+                let itemStatus = itemData.status || "UNPAID";
+                
+                if (b.status === "PAID") {
+                    itemStatus = "PAID"; // Force reflect paid if global status is set
+                }
+
+                if (itemStatus === "UNPAID") {
+                    currentRemaining += cost;
+                }
+                
+                itemRowsHtml += `
+                    <div class="breakdown-row">
+                        <span class="breakdown-label">🛠️ ${itemName.replace('_',' ')}</span>
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <span style="font-family:monospace;">₹${cost.toFixed(2)}</span>
+                            ${itemStatus === 'UNPAID' 
+                                ? `<button class="btn-pay" onclick="settleSeparateItem('${key}', '${itemName}', ${cost})">PAY ITEM</button>` 
+                                : '<span class="accent-green" style="font-size:11px; font-weight:bold;">PAID</span>'}
+                        </div>
+                    </div>`;
+            });
+
+            // Adjust display to zero balance if week status is marked PAID
+            if (b.status === "PAID") currentRemaining = 0;
 
             const isCurrentlyOpen = openDropdownIds.includes(`drop-${key}`) ? 'style="display: block;"' : '';
 
@@ -326,7 +333,7 @@
                 <div class="bill-row bill-clickable" style="${isOverdue ? 'border-color:#ff0033;' : ''}" onclick="toggleDropdown('drop-${key}')">
                     <div class="bill-info">
                         <strong>Week #${b.week_index} Statement ▾</strong>
-                        <span class="bill-meta">Due: ${new Date(b.due_timestamp).toLocaleDateString()}</span>
+                        <span class="bill-meta">Due: ${new Date(b.due_timestamp || BASELINE_DATE).toLocaleDateString()}</span>
                     </div>
                     <div style="display:flex; align-items:center; gap:15px;" onclick="event.stopPropagation();">
                         <span class="accent-amber" style="font-family:monospace; font-weight:bold;">₹${currentRemaining.toFixed(2)}</span>
@@ -336,7 +343,7 @@
                     </div>
                 </div>
                 <div id="drop-${key}" class="breakdown-container" ${isCurrentlyOpen}>
-                    ${itemRowsHtml || '<div style="color:#666; font-size:12px;">No breakdown details found.</div>'}
+                    ${itemRowsHtml}
                 </div>`;
         });
 
@@ -386,9 +393,13 @@
         updates[`balance`] = targetBalance;
         updates[`cen_regular_bills/${weekKey}/status`] = "PAID";
         
-        const currentBreakdown = entireDataCache.cen_regular_bills[weekKey].breakdown || {};
-        Object.keys(currentBreakdown).forEach(itemName => {
+        // Ensure breakdown object structure matches completely down into Firebase storage node
+        let targetBill = entireDataCache.cen_regular_bills[weekKey];
+        let activeBreakdown = targetBill.breakdown || generateLocalBreakdown(targetBill.generated_timestamp || BASELINE_DATE);
+
+        Object.keys(activeBreakdown).forEach(itemName => {
             updates[`cen_regular_bills/${weekKey}/breakdown/${itemName}/status`] = "PAID";
+            updates[`cen_regular_bills/${weekKey}/breakdown/${itemName}/amount`] = activeBreakdown[itemName].amount;
         });
 
         let historyRef = db.ref(`users/${userId}/history`).push();
@@ -409,12 +420,19 @@
         let targetBalance = Math.round((userBalance - itemAmount) * 100000) / 100000;
         let updates = {};
         updates[`balance`] = targetBalance;
-        updates[`cen_regular_bills/${weekKey}/breakdown/${itemName}/status`] = "PAID";
+        
+        let targetBill = entireDataCache.cen_regular_bills[weekKey];
+        let activeBreakdown = targetBill.breakdown || generateLocalBreakdown(targetBill.generated_timestamp || BASELINE_DATE);
 
-        const currentWeek = entireDataCache.cen_regular_bills[weekKey];
+        // Push layout state properties down into Firebase explicitly to sync structural integrity
+        Object.entries(activeBreakdown).forEach(([name, data]) => {
+            updates[`cen_regular_bills/${weekKey}/breakdown/${name}/amount`] = data.amount;
+            updates[`cen_regular_bills/${weekKey}/breakdown/${name}/status`] = (name === itemName) ? "PAID" : (data.status || "UNPAID");
+        });
+
         let allOthersPaid = true;
-        Object.entries(currentWeek.breakdown).forEach(([name, data]) => {
-            if (name !== itemName && data.status === "UNPAID") {
+        Object.entries(activeBreakdown).forEach(([name, data]) => {
+            if (name !== itemName && (data.status || "UNPAID") === "UNPAID") {
                 allOthersPaid = false;
             }
         });
