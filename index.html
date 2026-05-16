@@ -2,95 +2,265 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CEN PAY SYSTEM & BILLING REGISTRY</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CEN Registry Dashboard</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <style>
-        body { background: #0a0a0a; color: #fff; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 30px; display: flex; justify-content: center; }
-        .container { width: 100%; max-width: 1050px; display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
-        .card { background: #111; border: 1px solid #222; padding: 25px; border-radius: 16px; box-sizing: border-box; }
-        .full-width { grid-column: span 2; }
-        h2 { margin-top: 0; font-weight: 800; letter-spacing: -0.5px; font-size: 20px; border-bottom: 1px solid #222; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center;}
-        .accent-green { color: #00ff88; }
-        .accent-red { color: #ff0033; }
-        .accent-blue { color: #00e1ff; }
-        .accent-amber { color: #ffb300; }
-        
-        .metrics { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px; }
-        .metric-box { background: #161616; padding: 15px; border-radius: 10px; border-left: 4px solid #222; }
-        .metric-box.bal { border-left-color: #00ff88; }
-        .metric-box.penal { border-left-color: #ff0033; }
-        .metric-box.due { border-left-color: #ffb300; }
-        .metric-label { font-size: 11px; color: #666; font-weight: bold; text-transform: uppercase; }
-        .metric-value { font-size: 22px; font-weight: bold; margin-top: 5px; font-family: monospace; }
+        :root {
+            --bg-base: #121214;
+            --bg-surface: #1a1a1e;
+            --bg-element: #26262b;
+            --border-color: #2e2e35;
+            --accent-success: #34d399;
+            --accent-error: #f87171;
+            --accent-warning: #fbbf24;
+            --accent-info: #60a5fa;
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+        }
 
-        .bill-row { background: #161616; padding: 12px 15px; border-radius: 8px; border: 1px solid #222; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
-        .bill-info { display: flex; flex-direction: column; gap: 2px; }
-        .bill-meta { font-size: 11px; color: #666; }
-        .btn-pay { background: #00ff88; color: #000; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; }
-        .btn-pay:hover { background: #00cc6e; }
+        body { 
+            background: var(--bg-base); 
+            color: var(--text-primary); 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+            margin: 0; 
+            padding: 20px; 
+            display: flex; 
+            justify-content: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
 
-        .form-group { margin-bottom: 15px; }
-        label { display: block; font-size: 11px; color: #888; font-weight: bold; margin-bottom: 5px; text-transform: uppercase; }
-        input { width: 100%; padding: 12px; background: #000; border: 1px solid #333; color: #fff; border-radius: 8px; box-sizing: border-box; font-size: 15px; outline: none; }
-        input:focus { border-color: #00ff88; }
-        .btn-action { width: 100%; background: #00e1ff; color: #000; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px; }
+        .container { 
+            width: 100%; 
+            max-width: 1140px; 
+            display: grid; 
+            grid-template-columns: repeat(12, 1fr); 
+            gap: 24px; 
+        }
+
+        /* CARD STYLE */
+        .card { 
+            background: var(--bg-surface); 
+            border: 1px solid var(--border-color); 
+            padding: 24px; 
+            border-radius: 12px; 
+            box-sizing: border-box;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        /* GRID SYSTEM */
+        .full-width { grid-column: span 12; }
+        .col-6 { grid-column: span 6; }
+
+        /* HEADINGS */
+        h2 { 
+            margin-top: 0; 
+            font-weight: 600; 
+            font-size: 16px; 
+            color: var(--text-primary);
+            border-bottom: 1px solid var(--border-color); 
+            padding-bottom: 12px; 
+            margin-bottom: 20px;
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+        }
+        h2 span.counter {
+            font-size: 12px;
+            background: var(--bg-element);
+            padding: 2px 8px;
+            border-radius: 12px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        /* OVERVIEW METRICS */
+        .metrics-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+        .metric-card { 
+            background: var(--bg-element); 
+            padding: 20px; 
+            border-radius: 8px; 
+            border: 1px solid var(--border-color);
+        }
+        .metric-label { font-size: 12px; color: var(--text-secondary); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+        .metric-value { font-size: 24px; font-weight: 700; margin-top: 8px; font-family: SFMono-Regular, Consolas, monospace; }
         
-        .list-box { max-height: 320px; overflow-y: auto; padding-right: 5px; }
+        .val-success { color: var(--accent-success); }
+        .val-warning { color: var(--accent-warning); }
+        .val-error { color: var(--accent-error); }
+        .val-info { color: var(--accent-info); }
+
+        /* LIST & ROW MODULES */
+        .bill-row { 
+            background: var(--bg-element); 
+            padding: 16px; 
+            border-radius: 8px; 
+            border: 1px solid var(--border-color); 
+            margin-bottom: 12px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            font-size: 14px; 
+            transition: background 0.15s ease, border-color 0.15s ease;
+        }
+        .bill-clickable { cursor: pointer; }
+        .bill-clickable:hover { background: #2d2d34; border-color: #40404a; }
+        .bill-info { display: flex; flex-direction: column; gap: 4px; }
+        .bill-title { font-weight: 500; color: var(--text-primary); }
+        .bill-meta { font-size: 12px; color: var(--text-secondary); }
+        
+        /* BREAKDOWN INNER CONTAINER */
+        .breakdown-container { 
+            display: none; 
+            background: #1f1f23; 
+            margin-top: -16px; 
+            margin-bottom: 16px; 
+            padding: 4px 16px; 
+            border: 1px solid var(--border-color); 
+            border-top: none; 
+            border-radius: 0 0 8px 8px; 
+        }
+        .breakdown-row { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            padding: 12px 0; 
+            border-bottom: 1px solid var(--border-color); 
+            font-size: 13px; 
+        }
+        .breakdown-row:last-child { border-bottom: none; }
+        .breakdown-label { text-transform: capitalize; color: var(--text-secondary); }
+
+        /* ACTIONS & BUTTONS */
+        .btn {
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border: none;
+            outline: none;
+        }
+        .btn-secondary {
+            background: transparent;
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+        .btn-secondary:hover {
+            background: var(--bg-element);
+            border-color: var(--text-secondary);
+        }
+        .btn-primary {
+            background: var(--text-primary);
+            color: var(--bg-base);
+        }
+        .btn-primary:hover {
+            background: #e5e7eb;
+        }
+        .btn-submit {
+            width: 100%;
+            background: var(--text-primary);
+            color: var(--bg-base);
+            padding: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 8px;
+        }
+        .btn-submit:hover {
+            background: #e5e7eb;
+        }
+
+        /* FORM INPUTS */
+        .form-group { margin-bottom: 20px; }
+        label { display: block; font-size: 12px; color: var(--text-secondary); font-weight: 500; margin-bottom: 8px; }
+        input { 
+            width: 100%; 
+            padding: 12px; 
+            background: var(--bg-element); 
+            border: 1px solid var(--border-color); 
+            color: var(--text-primary); 
+            border-radius: 8px; 
+            box-sizing: border-box; 
+            font-size: 14px; 
+            outline: none; 
+            transition: border-color 0.15s ease;
+        }
+        input:focus { border-color: var(--text-secondary); }
+        
+        /* CONTAINER SCROLLING */
+        .list-box { max-height: 400px; overflow-y: auto; padding-right: 4px; }
+        .list-box::-webkit-scrollbar { width: 6px; }
+        .list-box::-webkit-scrollbar-track { background: transparent; }
+        .list-box::-webkit-scrollbar-thumb { background: var(--border-glow); border-radius: 4px; }
+
+        /* STATUS BADGES */
+        .status-tag { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+
+        /* RESPONSIVE LAYOUT MANAGER */
+        @media (max-width: 900px) {
+            .col-6 { grid-column: span 12; }
+            .metrics-grid { grid-template-columns: 1fr; gap: 12px; }
+            body { padding: 12px; }
+            .card { padding: 16px; }
+            .container { gap: 16px; }
+        }
     </style>
 </head>
 <body>
 
     <div class="container">
         
+        <!-- FINANCIAL SUMMARY ARCHITECTURE -->
         <div class="card full-width">
-            <h2 style="border:none; padding:0; margin-bottom:15px;">🏛️ CEN SYSTEM ACCOUNT PAYMENTS REGISTER</h2>
-            <div class="metrics">
-                <div class="metric-box bal">
-                    <div class="metric-label">Bank Liquid Balance</div>
-                    <div id="stat-balance" class="metric-value accent-green">₹0.00</div>
+            <h2 style="border:none; padding:0; margin-bottom:16px;">Account Ledger Overview</h2>
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-label">Liquid Balance</div>
+                    <div id="stat-balance" class="metric-value val-success">₹0.00</div>
                 </div>
-                <div class="metric-box due">
-                    <div class="metric-label">Total Outstandings</div>
-                    <div id="stat-outstanding" class="metric-value accent-amber">₹0.00</div>
+                <div class="metric-card">
+                    <div class="metric-label">Total Outstanding</div>
+                    <div id="stat-outstanding" class="metric-value val-warning">₹0.00</div>
                 </div>
-                <div class="metric-box penal">
-                    <div class="metric-label">Active Penalty Multiplier</div>
-                    <div id="stat-penalty" class="metric-value accent-red">₹0/day</div>
+                <div class="metric-card">
+                    <div class="metric-label">Accruing Penalty Rate</div>
+                    <div id="stat-penalty" class="metric-value val-error">₹0/day</div>
                 </div>
             </div>
         </div>
 
-        <!-- SECTION 1: REGULAR WEEKLY BILL GENERATOR -->
-        <div class="card">
-            <h2>Regular 7-Day Invoices</h2>
+        <!-- RECURRING STATEMENTS -->
+        <div class="card col-6">
+            <h2>Regular 7-Day Invoices <span class="counter" id="count-regular">0</span></h2>
             <div id="regular-bills-container" class="list-box"></div>
         </div>
 
-        <!-- SECTION 2: DAILY PROGRESSIVE TAXES -->
-        <div class="card">
-            <h2>Daily Dynamic Taxes (400-900)</h2>
+        <!-- DYNAMIC SYSTEM ASSESSMENTS -->
+        <div class="card col-6">
+            <h2>Daily Dynamic Taxes <span class="counter" id="count-taxes">0</span></h2>
             <div id="taxes-container" class="list-box"></div>
         </div>
 
-        <!-- SECTION 3: CUSTOM BILL GENERATOR -->
-        <div class="card">
-            <h2>Issue Ad-hoc Custom Invoices</h2>
+        <!-- EMISSION OPERATOR CONTROL -->
+        <div class="card col-6">
+            <h2>Issue Ad-hoc Invoice</h2>
             <div class="form-group">
-                <label>Invoice Label Description</label>
+                <label>Invoice Description</label>
                 <input type="text" id="cust-desc" placeholder="e.g., Server Cluster Maintenance Fee">
             </div>
             <div class="form-group">
-                <label>Amount (CEN)</label>
+                <label>Amount (INR)</label>
                 <input type="number" id="cust-amount" placeholder="0.00" min="1">
             </div>
-            <button class="btn-action" onclick="createCustomBill()">EMIT INVOICE TO REGISTRY</button>
+            <button class="btn btn-submit" onclick="createCustomBill()">Emit Invoice To Registry</button>
         </div>
 
-        <!-- SECTION 4: ACTIVE CUSTOM LEDGERS -->
-        <div class="card">
-            <h2>Custom Bills Ledger Matrix</h2>
+        <!-- CUSTOM RECORD ENTRIES -->
+        <div class="card col-6">
+            <h2>Custom Bills Matrix <span class="counter" id="count-custom">0</span></h2>
             <div id="custom-bills-container" class="list-box"></div>
         </div>
 
@@ -102,52 +272,34 @@
     const db = firebase.database();
     const userId = "pranshi_main";
 
-    // Deployment Baseline Lock: May 16, 2026
     const BASELINE_DATE = new Date("2026-05-16T00:00:00").getTime(); 
     
     let userBalance = 0;
     let entireDataCache = {};
 
-    // Base Monthly Rate Registry
     const MonthlyPrices = {
         water: 400, gas: 200, rent: 15000, dish_tv: 200,
         fees: 7000, society: 250, insurance: 2500, maid: 500,
         parking: 150, security: 300, extra: 1000
     };
 
-    // New Simplified Calendar Range Logic: Nov 1 to March 20 = 500, else 6000
     function getWeeklyElectricityRate(timestamp) {
         const date = new Date(timestamp);
-        const month = date.getMonth(); // 0 = Jan, 10 = Nov, 11 = Dec
+        const month = date.getMonth(); 
         const day = date.getDate();
-
-        let isWinterRate = false;
-
-        if (month === 10 || month === 11 || month === 0 || month === 1) {
-            // Whole of Nov, Dec, Jan, Feb
-            isWinterRate = true;
-        } else if (month === 2 && day <= 20) {
-            // March 1st to March 20th
-            isWinterRate = true;
-        }
-
-        const monthlyRate = isWinterRate ? 500 : 6000;
-        return (monthlyRate * 7) / 30; // Auto convert monthly price to 7-day rate
+        let isWinterRate = (month === 10 || month === 11 || month === 0 || month === 1) || (month === 2 && day <= 20);
+        return ((isWinterRate ? 500 : 6000) * 7) / 30; 
     }
 
-    // Dynamic Database Synchronization Node Listener
     db.ref(`users/${userId}`).on('value', async (snap) => {
         entireDataCache = snap.val() || {};
         userBalance = parseFloat(entireDataCache.balance) || 0;
-        document.getElementById('stat-balance').innerText = `₹${userBalance.toFixed(2)}`;
-        
+        document.getElementById('stat-balance').innerText = `₹${userBalance.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         await runBillingChronologyEngine();
     });
 
     async function runBillingChronologyEngine() {
         const now = Date.now();
-        
-        // Offset indexing so Day 1 and Week 1 fire instantly upon start
         const daysSinceDeployment = Math.floor((now - BASELINE_DATE) / (24 * 60 * 60 * 1000)) + 1;
         const weeksElapsed = Math.floor((daysSinceDeployment - 1) / 7) + 1;
 
@@ -155,21 +307,18 @@
         let penaltyAccumulatedToday = 0;
         let totalOutstandingCapital = 0;
 
-        // --- 1. CORE WEEKLY REGULAR INVOICES MATRIX ---
-        if (!entireDataCache.cen_regular_tracking) {
-            updates['cen_regular_tracking'] = { initial_week_processed: 0 };
-        }
+        if (!entireDataCache.cen_regular_tracking) updates['cen_regular_tracking'] = { initial_week_processed: 0 };
         const regularTracking = entireDataCache.cen_regular_tracking || { initial_week_processed: 0 };
         
         for (let w = regularTracking.initial_week_processed + 1; w <= weeksElapsed; w++) {
             let weekTargetBaseTime = BASELINE_DATE + ((w - 1) * 7 * 24 * 60 * 60 * 1000);
-            
-            let staticWeeklySum = 0;
-            Object.values(MonthlyPrices).forEach(val => { staticWeeklySum += (val * 7) / 30; });
-            
-            // Electricity is dynamically priced using the generation timestamp
-            const dynamicElectricity = getWeeklyElectricityRate(weekTargetBaseTime);
-            const finalWeekCost = staticWeeklySum + dynamicElectricity;
+            let breakdown = {};
+            Object.entries(MonthlyPrices).forEach(([key, val]) => {
+                breakdown[key] = { amount: Math.round(((val * 7) / 30) * 100) / 100, status: "UNPAID" };
+            });
+            const elecAmount = getWeeklyElectricityRate(weekTargetBaseTime);
+            breakdown['electricity'] = { amount: Math.round(elecAmount * 100) / 100, status: "UNPAID" };
+            let finalWeekCost = Object.values(breakdown).reduce((sum, item) => sum + item.amount, 0);
 
             let newWeekRef = db.ref(`users/${userId}/cen_regular_bills`).push();
             updates[`cen_regular_bills/${newWeekRef.key}`] = {
@@ -177,15 +326,13 @@
                 amount: Math.round(finalWeekCost * 100) / 100,
                 generated_timestamp: weekTargetBaseTime,
                 due_timestamp: weekTargetBaseTime + (7 * 24 * 60 * 60 * 1000),
+                breakdown: breakdown,
                 status: "UNPAID"
             };
             updates['cen_regular_tracking/initial_week_processed'] = w;
         }
 
-        // --- 2. DAILY AUTOMATED TAX GENERATION MATRIX ---
-        if (!entireDataCache.cen_tax_tracking) {
-            updates['cen_tax_tracking'] = { last_day_processed: 0 };
-        }
+        if (!entireDataCache.cen_tax_tracking) updates['cen_tax_tracking'] = { last_day_processed: 0 };
         const taxTracking = entireDataCache.cen_tax_tracking || { last_day_processed: 0 };
         
         for (let d = taxTracking.last_day_processed + 1; d <= daysSinceDeployment; d++) {
@@ -203,20 +350,24 @@
             updates['cen_tax_tracking/last_day_processed'] = d;
         }
 
-        // Push layout updates to Firebase and exit if cycles were generated
         if (Object.keys(updates).length > 0) {
             await db.ref(`users/${userId}`).update(updates);
             return; 
         }
 
-        // --- 3. DYNAMIC PUNISHMENT & PENALTY COUNTER ENGINE ---
         const regularBills = entireDataCache.cen_regular_bills || {};
         Object.entries(regularBills).forEach(([key, bill]) => {
             if (bill.status === "UNPAID") {
-                totalOutstandingCapital += bill.amount;
-                if (now > bill.due_timestamp) {
-                    penaltyAccumulatedToday += 700; 
+                let remainingAmount = 0;
+                if (bill.breakdown) {
+                    Object.values(bill.breakdown).forEach(item => {
+                        if (item.status === "UNPAID") remainingAmount += item.amount;
+                    });
+                } else {
+                    remainingAmount = bill.amount;
                 }
+                totalOutstandingCapital += remainingAmount;
+                if (remainingAmount > 0 && now > bill.due_timestamp) penaltyAccumulatedToday += 700; 
             }
         });
 
@@ -224,9 +375,7 @@
         Object.entries(taxBills).forEach(([key, tax]) => {
             if (tax.status === "UNPAID") {
                 totalOutstandingCapital += tax.amount;
-                if (now > tax.due_timestamp) {
-                    penaltyAccumulatedToday += 100;
-                }
+                if (now > tax.due_timestamp) penaltyAccumulatedToday += 100;
             }
         });
 
@@ -234,20 +383,15 @@
         Object.entries(customBills).forEach(([key, cbill]) => {
             if (cbill.status === "UNPAID") {
                 totalOutstandingCapital += cbill.amount;
-                if (now > cbill.due_timestamp) {
-                    penaltyAccumulatedToday += 100;
-                }
+                if (now > cbill.due_timestamp) penaltyAccumulatedToday += 100;
             }
         });
 
-        // Safe Auto-Deduct Loop Strategy (Maintains base liquid threshold > ₹0)
         if (penaltyAccumulatedToday > 0 && userBalance > 0) {
             let lastDeduct = entireDataCache.last_penalty_deduction_time || 0;
             if (now - lastDeduct > 60000) { 
                 let minuteFractionDeduction = penaltyAccumulatedToday / 1440; 
-                let prospectiveBalance = userBalance - minuteFractionDeduction;
-                if (prospectiveBalance < 0) prospectiveBalance = 0;
-                
+                let prospectiveBalance = Math.max(0, userBalance - minuteFractionDeduction);
                 await db.ref(`users/${userId}`).update({
                     balance: Math.round(prospectiveBalance * 100000) / 100000,
                     last_penalty_deduction_time: now
@@ -255,73 +399,161 @@
             }
         }
 
-        // Interface Elements Refresh
-        document.getElementById('stat-outstanding').innerText = `₹${totalOutstandingCapital.toFixed(2)}`;
+        document.getElementById('stat-outstanding').innerText = `₹${totalOutstandingCapital.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         document.getElementById('stat-penalty').innerText = `₹${penaltyAccumulatedToday}/day`;
 
         renderAllInterfaceViews(regularBills, taxBills, customBills);
     }
 
+    function toggleDropdown(id) {
+        const panel = document.getElementById(id);
+        panel.style.display = (panel.style.display === 'block') ? 'none' : 'block';
+    }
+
     function renderAllInterfaceViews(reg, tax, cust) {
-        // Section 1 Display Matrix
         const regBox = document.getElementById('regular-bills-container');
+        let regCount = 0;
         regBox.innerHTML = "";
         Object.entries(reg).reverse().forEach(([key, b]) => {
+            if(b.status === "UNPAID") regCount++;
             let isOverdue = Date.now() > b.due_timestamp && b.status === "UNPAID";
+            let currentRemaining = 0;
+            let itemRowsHtml = "";
+            
+            if (b.breakdown) {
+                Object.entries(b.breakdown).forEach(([itemName, item]) => {
+                    if (item.status === "UNPAID") currentRemaining += item.amount;
+                    itemRowsHtml += `
+                        <div class="breakdown-row">
+                            <span class="breakdown-label">${itemName.replace('_',' ')}</span>
+                            <div style="display:flex; align-items:center; gap:12px;">
+                                <span style="font-family:monospace; font-weight:600;">₹${item.amount.toFixed(2)}</span>
+                                ${item.status === 'UNPAID' 
+                                    ? `<button class="btn btn-secondary" onclick="settleSeparateItem('${key}', '${itemName}', ${item.amount})">Pay</button>` 
+                                    : '<span class="status-tag val-success">Paid</span>'}
+                            </div>
+                        </div>`;
+                });
+            } else {
+                currentRemaining = b.status === "UNPAID" ? b.amount : 0;
+            }
+
             regBox.innerHTML += `
-                <div class="bill-row" style="${isOverdue ? 'border-color:#ff0033;' : ''}">
+                <div class="bill-row bill-clickable" style="${isOverdue ? 'border-color:var(--accent-error);' : ''}" onclick="toggleDropdown('drop-${key}')">
                     <div class="bill-info">
-                        <strong>Week #${b.week_index} Complete Invoice</strong>
-                        <span class="bill-meta">Deadline Limit: ${new Date(b.due_timestamp).toLocaleString()}</span>
+                        <span class="bill-title">Week #${b.week_index} Statement ▾</span>
+                        <span class="bill-meta">Due: ${new Date(b.due_timestamp).toLocaleDateString()}</span>
                     </div>
-                    <div style="display:flex; align-items:center; gap:15px;">
-                        <span class="accent-amber" style="font-family:monospace; font-weight:bold;">₹${b.amount.toFixed(2)}</span>
-                        ${b.status === 'UNPAID' ? `<button class="btn-pay" onclick="settleInvoice('cen_regular_bills', '${key}', ${b.amount})">PAY</button>` : '<span class="accent-green">PAID</span>'}
+                    <div style="display:flex; align-items:center; gap:14px;" onclick="event.stopPropagation();">
+                        <span class="val-warning" style="font-family:monospace; font-weight:600; font-size:15px;">₹${currentRemaining.toFixed(2)}</span>
+                        ${b.status === 'UNPAID' 
+                            ? `<button class="btn btn-primary" onclick="settleFullWeek('${key}', ${currentRemaining})">Pay Week</button>` 
+                            : '<span class="status-tag val-success">Paid</span>'}
                     </div>
+                </div>
+                <div id="drop-${key}" class="breakdown-container">
+                    ${itemRowsHtml || '<div style="color:var(--text-secondary); font-size:12px;">No details found.</div>'}
                 </div>`;
         });
+        document.getElementById('count-regular').innerText = regCount;
 
-        // Section 2 Display Matrix
         const taxBox = document.getElementById('taxes-container');
+        let taxCount = 0;
         taxBox.innerHTML = "";
-        Object.entries(tax).reverse().slice(0, 30).forEach(([key, t]) => {
+        Object.entries(tax).reverse().slice(0, 25).forEach(([key, t]) => {
+            if(t.status === "UNPAID") taxCount++;
             let isOverdue = Date.now() > t.due_timestamp && t.status === "UNPAID";
             taxBox.innerHTML += `
-                <div class="bill-row" style="${isOverdue ? 'border-color:#ff0033;' : ''}">
+                <div class="bill-row" style="${isOverdue ? 'border-color:var(--accent-error);' : ''}">
                     <div class="bill-info">
-                        <strong>Day ${t.day_index} System Assessment Tax</strong>
-                        <span class="bill-meta">Grace End: ${new Date(t.due_timestamp).toLocaleString()}</span>
+                        <span class="bill-title">Day ${t.day_index} Assessment Tax</span>
+                        <span class="bill-meta">Due: ${new Date(t.due_timestamp).toLocaleDateString()}</span>
                     </div>
-                    <div style="display:flex; align-items:center; gap:15px;">
-                        <span class="accent-red" style="font-family:monospace; font-weight:bold;">₹${t.amount}</span>
-                        ${t.status === 'UNPAID' ? `<button class="btn-pay" onclick="settleInvoice('cen_taxes', '${key}', ${t.amount})">PAY</button>` : '<span class="accent-green">PAID</span>'}
+                    <div style="display:flex; align-items:center; gap:14px;">
+                        <span class="val-error" style="font-family:monospace; font-weight:600; font-size:15px;">₹${t.amount}</span>
+                        ${t.status === 'UNPAID' ? `<button class="btn btn-secondary" onclick="settleInvoice('cen_taxes', '${key}', ${t.amount})">Clear</button>` : '<span class="status-tag val-success">Paid</span>'}
                     </div>
                 </div>`;
         });
+        document.getElementById('count-taxes').innerText = taxCount;
 
-        // Section 4 Display Matrix (Custom Ledgers)
         const custBox = document.getElementById('custom-bills-container');
+        let custCount = 0;
         custBox.innerHTML = "";
         Object.entries(cust).reverse().forEach(([key, c]) => {
+            if(c.status === "UNPAID") custCount++;
             let isOverdue = Date.now() > c.due_timestamp && c.status === "UNPAID";
             custBox.innerHTML += `
-                <div class="bill-row" style="${isOverdue ? 'border-color:#ff0033;' : ''}">
+                <div class="bill-row" style="${isOverdue ? 'border-color:var(--accent-error);' : ''}">
                     <div class="bill-info">
-                        <strong>${c.description}</strong>
-                        <span class="bill-meta">24H Expiration: ${new Date(c.due_timestamp).toLocaleString()}</span>
+                        <span class="bill-title">${c.description}</span>
+                        <span class="bill-meta">Due: ${new Date(c.due_timestamp).toLocaleDateString()}</span>
                     </div>
-                    <div style="display:flex; align-items:center; gap:15px;">
-                        <span class="accent-blue" style="font-family:monospace; font-weight:bold;">₹${c.amount}</span>
-                        ${t.status === 'UNPAID' ? `<button class="btn-pay" onclick="settleInvoice('cen_custom_bills', '${key}', ${c.amount})">PAY</button>` : '<span class="accent-green">SETTLED</span>'}
+                    <div style="display:flex; align-items:center; gap:14px;">
+                        <span class="val-info" style="font-family:monospace; font-weight:600; font-size:15px;">₹${c.amount}</span>
+                        ${c.status === 'UNPAID' ? `<button class="btn btn-secondary" onclick="settleInvoice('cen_custom_bills', '${key}', ${c.amount})">Settle</button>` : '<span class="status-tag val-success">Settled</span>'}
                     </div>
                 </div>`;
         });
+        document.getElementById('count-custom').innerText = custCount;
+    }
+
+    async function settleFullWeek(weekKey, remainingAmount) {
+        if (remainingAmount <= 0) return;
+        if (userBalance < remainingAmount) return alert("Error: Insufficient funds.");
+
+        let targetBalance = Math.round((userBalance - remainingAmount) * 100000) / 100000;
+        let updates = {};
+        updates[`balance`] = targetBalance;
+        updates[`cen_regular_bills/${weekKey}/status`] = "PAID";
+        
+        const currentBreakdown = entireDataCache.cen_regular_bills[weekKey].breakdown || {};
+        Object.keys(currentBreakdown).forEach(itemName => {
+            updates[`cen_regular_bills/${weekKey}/breakdown/${itemName}/status`] = "PAID";
+        });
+
+        let historyRef = db.ref(`users/${userId}/history`).push();
+        updates[`history/${historyRef.key}`] = {
+            amount: -remainingAmount,
+            description: `REGISTRY SYSTEM: FULL RECONCILIATION COMPLETE [WK ${entireDataCache.cen_regular_bills[weekKey].week_index}]`,
+            timestamp: new Date().toLocaleString(),
+            type: "DEBIT"
+        };
+
+        await db.ref(`users/${userId}`).update(updates);
+    }
+
+    async function settleSeparateItem(weekKey, itemName, itemAmount) {
+        if (userBalance < itemAmount) return alert("Error: Insufficient funds.");
+
+        let targetBalance = Math.round((userBalance - itemAmount) * 100000) / 100000;
+        let updates = {};
+        updates[`balance`] = targetBalance;
+        updates[`cen_regular_bills/${weekKey}/breakdown/${itemName}/status`] = "PAID";
+
+        const currentWeek = entireDataCache.cen_regular_bills[weekKey];
+        let allOthersPaid = true;
+        Object.entries(currentWeek.breakdown).forEach(([name, data]) => {
+            if (name !== itemName && data.status === "UNPAID") allOthersPaid = false;
+        });
+
+        if (allOthersPaid) updates[`cen_regular_bills/${weekKey}/status`] = "PAID";
+
+        let historyRef = db.ref(`users/${userId}/history`).push();
+        updates[`history/${historyRef.key}`] = {
+            amount: -itemAmount,
+            description: `REGISTRY SYSTEM: COMPONENT SETTLED [${itemName.toUpperCase()}]`,
+            timestamp: new Date().toLocaleString(),
+            type: "DEBIT"
+        };
+
+        await db.ref(`users/${userId}`).update(updates);
     }
 
     async function createCustomBill() {
-        const desc = document.getElementById('cust-desc').value || "Ad-hoc Registry Charge";
+        const desc = document.getElementById('cust-desc').value || "AD-HOC REGISTRY ENTRY";
         const amount = parseFloat(document.getElementById('cust-amount').value) || 0;
-        if (amount <= 0) return alert("Declare a functional billing amount payload.");
+        if (amount <= 0) return alert("Error: Please provide a valid transaction amount.");
 
         const now = Date.now();
         await db.ref(`users/${userId}/cen_custom_bills`).push({
@@ -337,7 +569,7 @@
     }
 
     async function settleInvoice(nodePath, key, amount) {
-        if (userBalance < amount) return alert("Insufficient balance to execute full transaction processing.");
+        if (userBalance < amount) return alert("Error: Insufficient funds.");
 
         let targetBalance = Math.round((userBalance - amount) * 100000) / 100000;
         let updates = {};
@@ -347,13 +579,12 @@
         let historyRef = db.ref(`users/${userId}/history`).push();
         updates[`history/${historyRef.key}`] = {
             amount: -amount,
-            description: `CEN PAY RECONCILIATION: CLEARED (${nodePath.replace('cen_','').toUpperCase()})`,
+            description: `REGISTRY SYSTEM: LIQUIDATION SUCCESSFUL [${nodePath.replace('cen_','').toUpperCase()}]`,
             timestamp: new Date().toLocaleString(),
             type: "DEBIT"
         };
 
         await db.ref(`users/${userId}`).update(updates);
-        alert("Payment completed successfully.");
     }
 </script>
 </body>
